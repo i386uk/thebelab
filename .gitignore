@@ -12,5 +12,6 @@ coverage
 .tmp
 .DS_Store
 .cache
+.idea
 
 webpack.stats.*
