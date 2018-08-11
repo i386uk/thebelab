@@ -17,16 +17,24 @@ import {
 } from "@jupyterlab/rendermime";
 import {
   WIDGET_MIMETYPE,
-  WidgetRenderer
-} from '@jupyter-widgets/html-manager/lib/output_renderers';
-import {
-  ThebeManager
-} from './manager';
+  WidgetRenderer,
+} from "@jupyter-widgets/html-manager/lib/output_renderers";
+import { ThebeManager } from "./manager";
+import { requireLoader } from "./loader";
+
 import { Mode } from "@jupyterlab/codemirror";
 
 import "@jupyterlab/theme-light-extension/static/index.css";
 import "@jupyter-widgets/controls/css/widgets.built.css";
 import "./index.css";
+
+import * as base from "@jupyter-widgets/base";
+import * as controls from "@jupyter-widgets/controls";
+
+if (typeof window !== "undefined" && typeof window.define !== "undefined") {
+  window.define("@jupyter-widgets/base", base);
+  window.define("@jupyter-widgets/controls", controls);
+}
 
 // events
 
@@ -134,11 +142,14 @@ function renderCell(element, options) {
 
   let manager = options.manager;
 
-  renderMime.addFactory({
-    safe: false,
-    mimeTypes: [WIDGET_MIMETYPE],
-    createRenderer: options => new WidgetRenderer(options, manager)
-  }, 1);
+  renderMime.addFactory(
+    {
+      safe: false,
+      mimeTypes: [WIDGET_MIMETYPE],
+      createRenderer: options => new WidgetRenderer(options, manager),
+    },
+    1
+  );
 
   let model = new OutputAreaModel({ trusted: true });
 
@@ -154,7 +165,14 @@ function renderCell(element, options) {
   $cell.append(
     $("<button class='thebelab-button thebelab-run-button'>")
       .text("run")
+      .attr("title", "run this cell")
       .click(execute)
+  );
+  $cell.append(
+    $("<button class='thebelab-button thebelab-restart-button'>")
+      .text("restart")
+      .attr("title", "restart the kernel")
+      .click(restart)
   );
   let kernelResolve, kernelReject;
   let kernelPromise = new Promise((resolve, reject) => {
@@ -188,6 +206,15 @@ function renderCell(element, options) {
     return false;
   }
 
+  function restart() {
+    let kernel = $cell.data("kernel");
+    if (kernel) {
+        kernelPromise.then(kernel => {
+            kernel.restart();
+        });
+    }
+  }
+
   let theDiv = document.createElement("div");
   $cell.append(theDiv);
   Widget.attach(outputArea, theDiv);
@@ -210,11 +237,15 @@ export function renderAllCells({ selector = _defaultOptions.selector } = {}) {
   // render all elements matching `selector` as cells.
   // by default, this is all cells with `data-executable`
 
-  let manager = new ThebeManager();
+  let manager = new ThebeManager({
+    loader: requireLoader,
+  });
 
-  return $(selector).map((i, cell) => renderCell(cell, {
-      manager: manager
-  }));
+  return $(selector).map((i, cell) =>
+    renderCell(cell, {
+      manager: manager,
+    })
+  );
 }
 
 export function hookupKernel(kernel, cells) {
